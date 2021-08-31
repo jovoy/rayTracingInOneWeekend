@@ -2,7 +2,7 @@ import basetypes, math, aabb, algorithm, random
 
 type
   HittableKind* = enum
-    htSphere, htBvhNode, htXyRect, htXzRect, htYzRect, htBox, htDisk
+    htSphere, htBvhNode, htXyRect, htXzRect, htYzRect, htBox, htDisk, htParaboloid
   Hittable* = ref object
     case kind*: HittableKind
     of htSphere: hSphere*: Sphere
@@ -12,6 +12,7 @@ type
     of htYzRect: hYzRect*: YzRect
     of htBox: hBox: Box
     of htDisk: hDisk: Disk
+    of htParaboloid: hParaboloid*: Paraboloid
 
   HittablesList* = object
     len: int # len of data seq
@@ -55,6 +56,14 @@ type
   Disk* = object
     distance*: float # distance along z axis
     radius*: float
+    mat*: Material
+
+  Paraboloid* = object
+    center*: Point
+    radius*: float
+    p*: float #distance between focal point and vertex aka center
+    zmax*: float #z at radius
+    zmin*: float 
     mat*: Material
 
   MaterialKind* = enum
@@ -195,6 +204,11 @@ proc add*(h: var HittablesList, lst: HittablesList) =
   for x in lst:
     h.add x
 
+proc add*(h: var HittablesList, p: Paraboloid) =
+  var ht = Hittable(kind: htParaboloid)
+  ht.hParaboloid = p
+  h.add ht
+
 proc setFaceNormal*(rec: var HitRecord, r: Ray, outward_normal: Vec3) =
   rec.frontFace = r.dir.dot(outward_normal) < 0
   rec.normal = if rec.frontFace: outward_normal else: -outward_normal
@@ -320,6 +334,33 @@ proc hit*(rect: YzRect, r: Ray, t_min, t_max: float, rec: var HitRecord): bool =
 proc hit*(box: Box, r: Ray, t_min, t_max: float, rec: var HitRecord): bool =
   result = box.sides.hit(r, t_min, t_max, rec)
 
+proc hit*(p: Paraboloid, r: Ray, t_min, t_max: float, rec: var HitRecord): bool = #not rotatable, has to be parallel to z axis
+  let a = r.dir.x * r.dir.x + r.dir.y * r.dir.y
+  let half_b = (- p.center.x + r.orig.x) * r.dir.x + (- p.center.y + r.orig.y) * r.dir.y - 2.0 * r.dir.z * p.p
+  let c = p.center.x * (p.center.x - 2.0 * r.orig.x) + r.dir.x * r.dir.x + p.center.y * (p.center.y - 2.0 * r.orig.y) + r.dir.y * r.dir.y + 4.0 * (p.center.z - r.orig.z) * p.p
+
+  let discriminant = half_b * half_b - a * c
+  if discriminant < 0:
+    return false
+  let sqrtd = sqrt discriminant
+
+  # find nearest root that lies in acceptable range
+  var root = (-half_b - sqrtd) / a
+  if root < t_min or t_max < root:
+    root = (-half_b + sqrtd) / a
+    if root < t_min or t_max < root:
+      return false
+
+  rec.t = root
+  rec.p = r.at(rec.t)
+  if rec.p.z < p.zmin or rec.p.z > p.zmax:
+    return false
+  let outward_normal = unitVector(vec3(2.0 * rec.p.x, 2.0 * rec.p.y, - 4.0 * p.p))
+  rec.setFaceNormal(r, outward_normal.Vec3)
+  rec.mat = p.mat
+
+  result = true
+
 proc hit*(h: Hittable, r: Ray, t_min, t_max: float, rec: var HitRecord): bool {.gcsafe.} =
   case h.kind
   of htSphere: result = h.hSphere.hit(r, t_min, t_max, rec)
@@ -329,6 +370,7 @@ proc hit*(h: Hittable, r: Ray, t_min, t_max: float, rec: var HitRecord): bool {.
   of htXzRect: result = h.hXzRect.hit(r, t_min, t_max, rec)
   of htYzRect: result = h.hYzRect.hit(r, t_min, t_max, rec)
   of htBox: result = h.hBox.hit(r, t_min, t_max, rec)
+  of htParaboloid: result = h.hParaboloid.hit(r, t_min, t_max, rec)
 
 proc boundingBox*(s: Sphere, output_box: var AABB): bool =
   ##
@@ -372,6 +414,14 @@ proc boundingBox*(b: Box, outputBox: var AABB): bool =
   outputBox = initAabb(b.boxMin, b.boxMax)
   result = true
 
+proc boundingBox*(p: Paraboloid, output_box: var AABB): bool =
+  ##
+  output_box = initAabb(
+    point(p.radius, p.radius, p.zmin),
+    point(p.radius, p.radius, p.zmax)
+  )
+  result = true
+
 proc boundingBox*(h: Hittable, output_box: var AABB): bool =
   case h.kind
   of htSphere: result = h.hSphere.boundingBox(output_box)
@@ -381,6 +431,7 @@ proc boundingBox*(h: Hittable, output_box: var AABB): bool =
   of htXzRect: result = h.hXzRect.boundingBox(output_box)
   of htYzRect: result = h.hYzRect.boundingBox(output_box)
   of htBox: result = h.hBox.boundingBox(output_box)
+  of htParaboloid: result = h.hParaboloid.boundingBox(output_box)
 
 proc boundingBox*(h: HittablesList, output_box: var AABB): bool =
   if h.len == 0:
@@ -498,6 +549,9 @@ proc initBox*(p0, p1: Point, mat: Material): Box =
 
   result.sides.add initYzRect(p0.y, p1.y, p0.z, p1.z, p1.x, mat)
   result.sides.add initYzRect(p0.y, p1.y, p0.z, p1.z, p0.x, mat)
+
+proc initParaboloid*(center: Point, radius: float, p: float, zmax: float, zmin: float, mat: Material): Paraboloid =
+  result = Paraboloid(center: center, radius: radius, p: p, zmax: zmax, zmin: zmin, mat: mat)
 
 proc scatter*(l: Lambertian, r_in: Ray, rec: HitRecord,
               attenuation: var Color, scattered: var Ray): bool =
