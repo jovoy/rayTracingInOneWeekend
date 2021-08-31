@@ -335,9 +335,14 @@ proc hit*(box: Box, r: Ray, t_min, t_max: float, rec: var HitRecord): bool =
   result = box.sides.hit(r, t_min, t_max, rec)
 
 proc hit*(p: Paraboloid, r: Ray, t_min, t_max: float, rec: var HitRecord): bool = #not rotatable, has to be parallel to z axis
+  let k = p.zmax / (p.radius * p.radius)
+  #[let a = k * (r.dir.x * r.dir.x + r.dir.y * r.dir.y)#
+  let half_b = k * (r.orig.x * r.dir.x + r.orig.y * r.dir.y) - r.dir.z  #
+  let c = k * ]#
   let a = r.dir.x * r.dir.x + r.dir.y * r.dir.y
   let half_b = (- p.center.x + r.orig.x) * r.dir.x + (- p.center.y + r.orig.y) * r.dir.y - 2.0 * r.dir.z * p.p
-  let c = p.center.x * (p.center.x - 2.0 * r.orig.x) + r.dir.x * r.dir.x + p.center.y * (p.center.y - 2.0 * r.orig.y) + r.dir.y * r.dir.y + 4.0 * (p.center.z - r.orig.z) * p.p
+  let c = p.center.x * (p.center.x - 2.0 * r.orig.x) + r.orig.x * r.orig.x + p.center.y * (p.center.y - 2.0 * r.orig.y) + r.orig.y * r.orig.y + 4.0 * (p.center.z - r.orig.z) * p.p
+
 
   let discriminant = half_b * half_b - a * c
   if discriminant < 0:
