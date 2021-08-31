@@ -417,8 +417,36 @@ proc sceneCast(): HittablesList =
 
 proc sceneDisk(): HittablesList =
   result = initHittables(0)
-  let groundMaterial = initMaterial(initLambertian(color(0.2, 0.7, 0.2)))
-  result.add Disk(distance: 1.5, radius: 1.5, mat: groundMaterial)
+  let groundMaterial = initMaterial(initMetal(color(0.6, 0.6, 0.6), 0.2))
+  result.add Disk(distance: -2.5, radius: 1.5, mat: groundMaterial)
+  let mat2 = initMaterial(initLambertian(color(0.4, 0.2, 0.1)))
+  result.add Sphere(center: point(0, 0, -2), radius: 1.0, mat: mat2)
+  #let mat2 = initMaterial(initLambertian(color(0.4, 0.2, 0.1)))
+  result.add Sphere(center: point(0,-100.5,-2), radius: 97.0, mat: mat2)
+
+proc sceneParaboloid(): HittablesList =
+  result = initHittables(0)
+  let glass = initMaterial(initDielectric(1.5))
+  let metal = initMaterial(initMetal(color(0.6, 0.6, 0.6), 0.0))
+  result.add Paraboloid(center: point(0.0, 0.0, -3), radius: 3.50, p: 0.20025, zmax: 0.0, zmin: -3, mat: metal)
+  let mat2 = initMaterial(initLambertian(color(0.4, 0.2, 0.1)))
+  let matGround = initMaterial(initLambertian(color(0.8, 0.8, 0.5)))
+  result.add Sphere(center: point(-2, 0, -2), radius: 0.3, mat: mat2)
+  result.add Sphere(center: point(1, -1, -2), radius: 0.3, mat: mat2)
+  #let mat2 = initMaterial(initLambertian(color(0.4, 0.2, 0.1)))
+  result.add Sphere(center: point(0,-100.5,-2), radius: 97.0, mat: matGround)
+
+proc sceneSphere2(): HittablesList =
+  result = initHittables(0)
+  let glass = initMaterial(initDielectric(1.5))
+  let metal = initMaterial(initMetal(color(0.6, 0.6, 0.6), 0.0))
+  let groundMaterial = initMaterial(initMetal(color(0.6, 0.6, 0.6), 0.2))
+  #result.add Disk(distance: -2.5, radius: 1.5, mat: groundMaterial)
+  let mat2 = initMaterial(initLambertian(color(0.918, 0.725, 0.047)))
+  let mat3 = initMaterial(initLambertian(color(0.027, 0.32, 0.604)))
+  result.add Sphere(center: point(0, 0, -2), radius: 1.0, mat: mat3)
+  #let mat2 = initMaterial(initLambertian(color(0.4, 0.2, 0.1)))
+  result.add Sphere(center: point(0,-100.5,-2), radius: 97.0, mat: mat2)
 
 proc main =
   # Image
@@ -451,5 +479,36 @@ proc main =
   img.renderMC(fname, world, camera, samplesPerPixel, maxDepth)
   #img.renderSdl(world, camera, samplesPerPixel, maxDepth)
 
+proc main2 =
+  # Image
+  const ratio = 16.0 / 9.0
+  const width = 1200 
+  let img = Image(width: width, height: (width / ratio).int)
+  let samplesPerPixel = 100 #50
+  let maxDepth = 10
+
+  # World
+  var world = sceneParaboloid() #sceneCast() #randomScene()
+
+  # Camera
+  #let lookFrom = point(-1, 5.0, -4) #point(-0.5, 3, -0.5)#point(3,3,2)
+  #let lookAt = point(1.0, 3.0, 2.0) #point(0, 1.5, 2.5)#point(0,0,-1)
+  let lookFrom = point(3,0,-2)
+  let lookAt = point(0,0,-2)
+  let vup = vec3(0,1,0)
+  let distToFocus = 3.0 #(lookFrom - lookAt).length()
+  let aperture = 0.0
+  let camera = initCamera(lookFrom, lookAt, vup, vfov = 90,
+                          aspectRatio = ratio,
+                          aperture = aperture, focusDist = distToFocus)
+
+  # Rand seed
+  randomize(0xE7)
+
+  # Render (image)
+  let fname = &"render_width_{width}_samplesPerPixel_{samplesPerPixel}.ppm"
+  img.renderMC(fname, world, camera, samplesPerPixel, maxDepth)
+  #img.renderSdl(world, camera, samplesPerPixel, maxDepth)
+
 when isMainModule:
-  main()
+  main2()
